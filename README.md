@@ -25,11 +25,3 @@ Each action has the following properties:
 
 - `name`: The name of the action (e.g., `console_action`).
 - `enabled`: Whether the action is enabled.
-
-## Running the Application
-
-To run the application, execute the following command:
-
-```bash
-python main.py
-```
