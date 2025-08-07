@@ -3,8 +3,8 @@ import ollama
 
 class OllamaAnalyzer:
     def __init__(self, config):
-        self.ollama_host = config['ollama']['host']
-        self.ollama_model = config['ollama']['model']
+        self.ollama_host = config.ollama.host
+        self.ollama_model = config.ollama.model
         print(
             f"OllamaAnalyzer initialized with Host: {self.ollama_host}, Model: {self.ollama_model}")
 

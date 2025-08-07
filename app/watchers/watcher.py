@@ -3,13 +3,12 @@ from typing import Any
 
 
 class Watcher(ABC):
-    """
-    Abstract base class for watchers.
-    """
+    """Abstract base class for all watchers."""
+
+    def __init__(self, config):
+        self.config = config
 
     @abstractmethod
     def watch(self) -> Any:
-        """
-        Method to be implemented by subclasses to define the watch behavior.
-        """
+        """Collect data from the watcher."""
         pass

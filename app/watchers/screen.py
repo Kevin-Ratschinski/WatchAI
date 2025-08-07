@@ -11,8 +11,7 @@ class ScreenWatcher(Watcher):
     """
 
     def __init__(self, config):
-        super().__init__()
-        self.config = config
+        super().__init__(config)
         print("ScreenWatcher initialized.")
 
     def watch(self) -> str | None:

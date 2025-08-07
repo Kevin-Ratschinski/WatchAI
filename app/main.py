@@ -1,68 +1,80 @@
-import time
-import yaml
+import importlib
 import logging
+import threading
+import time
 
+import yaml
 from analyzers.ollama import OllamaAnalyzer
-from watchers.screen import ScreenWatcher
-from actions.console import ConsoleAction
+from config import Config
+from pydantic import ValidationError
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-def get_action_instance(action_name):
-    if action_name == 'console_action':
-        return ConsoleAction()
-    return None
+def _load_plugin(plugin_type, plugin_config):
+    """Dynamically load a watcher or action plugin."""
+    plugin_name = None
+    try:
+        plugin_name = plugin_config.name
+        module_name = f"{plugin_type}s.{plugin_name.replace('_watcher', '').replace('_action', '')}"
+        class_name = ''.join(word.capitalize()
+                             for word in plugin_name.split('_'))
+
+        module = importlib.import_module(module_name)
+        plugin_class = getattr(module, class_name)
+
+        return plugin_class(plugin_config)
+    except (ImportError, AttributeError) as e:
+        logging.error(f"Failed to load plugin: {plugin_name} ({e})")
+        return None
 
 
-def load_config(config_path="config.yaml"):
-    """Load the configuration from a YAML file."""
+def load_config(config_path="config.yaml") -> Config | None:
+    """Load and validate the configuration from a YAML file."""
     try:
         with open(config_path, 'r') as f:
-            return yaml.safe_load(f)
+            config_data = yaml.safe_load(f)
+            return Config.model_validate(config_data)
     except FileNotFoundError:
         logging.error(f"Configuration file '{config_path}' not found.")
-        exit(1)
-    except yaml.YAMLError as e:
-        logging.error(f"Error parsing YAML configuration: {e}")
-        exit(1)
+        return None
+    except (yaml.YAMLError, ValidationError) as e:
+        logging.error(f"Error parsing or validating YAML configuration: {e}")
+        return None
 
 
 def main():
     config = load_config()
+    if not config:
+        exit(1)
 
-    # Initialize watchers based on the configuration
     watchers = {}
-    for watcher_config in config.get('watchers', []):
-        if watcher_config.get('enabled'):
-            watcher_name = watcher_config['name']
-            if watcher_name == 'screen_watcher':
+    for watcher_config in config.watchers:
+        if watcher_config.enabled:
+            instance = _load_plugin("watcher", watcher_config)
+            if instance:
+                watcher_name = watcher_config.name
                 watchers[watcher_name] = {
-                    'instance': ScreenWatcher(watcher_config),
-                    'interval': watcher_config.get('interval', 10),
-                    'prompt': watcher_config.get('prompt', '')
+                    'instance': instance,
+                    'interval': watcher_config.interval_seconds,
+                    'prompt': watcher_config.prompt
                 }
                 logging.info(
                     f"'{watcher_name}' initialized with interval: {watchers[watcher_name]['interval']}s")
-            else:
-                logging.warning(f"Unknown watcher type: {watcher_name}. Ignored.")
 
     if not watchers:
         logging.info("No active watchers found in the configuration. Exiting.")
         return
 
-    # Initialize actions based on the configuration
     actions = []
-    for action_config in config.get('actions', []):
-        if action_config.get('enabled'):
-            action_name = action_config.get('name')
-            action_instance = get_action_instance(action_name)
-            if action_instance:
-                actions.append(action_instance)
-                logging.info(f"'{action_name}' initialized.")
-            else:
-                logging.warning(f"Unknown action type: {action_name}. Ignored.")
+    for action_config in config.actions:
+        if action_config.enabled:
+            instance = _load_plugin("action", action_config)
+            if instance:
+                actions.append(instance)
+                logging.info(f"'{action_config.name}' initialized.")
 
     if not actions:
         logging.info("No active actions found in the configuration. Exiting.")
@@ -70,42 +82,60 @@ def main():
 
     ollama_analyzer = OllamaAnalyzer(config)
 
-    logging.info("Starting monitoring loop. Press Ctrl+C to exit.")
-    try:
-        while True:
-            for watcher_name, watcher_info in watchers.items():
-                try:
-                    logging.info(f"--- Starting cycle for {watcher_name} ---")
-                    watcher_instance = watcher_info['instance']
-                    interval = watcher_info['interval']
-                    prompt = watcher_info['prompt']
+    stop_event = threading.Event()
 
-                    # Data collection
-                    collected_data = watcher_instance.watch()
+    def watcher_loop(watcher_name, watcher_info, stop_event):
+        while not stop_event.is_set():
+            try:
+                logging.info(f"--- Starting cycle for {watcher_name} ---")
+                watcher_instance = watcher_info['instance']
+                interval = watcher_info['interval']
+                prompt = watcher_info['prompt']
 
-                    if collected_data:
-                        # Analysis
-                        llm_response = ollama_analyzer.analyze(
-                            collected_data, prompt)
-                        logging.info(f"LLM Response: {llm_response}")
+                collected_data = watcher_instance.watch()
 
-                        # Execute actions
-                        for action in actions:
-                            action.execute(llm_response)
-                    else:
-                        logging.info(
-                            f"No data collected from {watcher_name}. Skipping analysis.")
+                if collected_data:
+                    llm_response = ollama_analyzer.analyze(
+                        collected_data, prompt)
+                    logging.info(f"LLM Response: {llm_response}")
 
+                    for action in actions:
+                        action.execute(llm_response)
+                else:
                     logging.info(
-                        f"Waiting {interval} seconds until next cycle for {watcher_name}...")
-                    time.sleep(interval)
+                        f"No data collected from {watcher_name}. Skipping analysis.")
 
-                except Exception as e:
-                    logging.error(f"An error occurred during the {watcher_name} cycle: {e}")
-                    time.sleep(watcher_info.get('interval', 10))  # Wait before retrying
+                for _ in range(interval):
+                    if stop_event.is_set():
+                        break
+                    time.sleep(1)
 
+            except Exception as e:
+                logging.error(
+                    f"An error occurred during the {watcher_name} cycle: {e}")
+                time.sleep(watcher_info.get('interval', 10))
+
+        logging.info(f"{watcher_name} thread exiting...")
+
+    threads = []
+    for watcher_name, watcher_info in watchers.items():
+        thread = threading.Thread(
+            target=watcher_loop, args=(watcher_name, watcher_info, stop_event))
+        thread.start()
+        threads.append(thread)
+
+    logging.info("Monitoring started. Press Ctrl+C to exit.")
+
+    try:
+        while any(thread.is_alive() for thread in threads):
+            time.sleep(1)
     except KeyboardInterrupt:
-        logging.info("Monitoring stopped.")
+        logging.info("Interrupt received. Stopping monitoring...")
+        stop_event.set()
+        for thread in threads:
+            thread.join()
+
+    logging.info("All threads stopped. Exiting.")
 
 
 if __name__ == "__main__":
