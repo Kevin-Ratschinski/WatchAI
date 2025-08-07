@@ -9,7 +9,7 @@ watchers:
     prompt: "Describe what you see on this screenshot. Focus on open applications, windows, and visible text."
 
   - name: "system_watcher"
-    enabled: false
+    enabled: true
     interval: 60
     prompt: "Are there any anomalies based on these system statistics?"
 

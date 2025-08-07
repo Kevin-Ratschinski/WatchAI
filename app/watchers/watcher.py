@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Any
 
 
 class Watcher(ABC):
@@ -9,6 +8,6 @@ class Watcher(ABC):
         self.config = config
 
     @abstractmethod
-    def watch(self) -> Any:
+    def watch(self) -> str:
         """Collect data from the watcher."""
         pass

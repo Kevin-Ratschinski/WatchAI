@@ -31,6 +31,17 @@ def _load_plugin(plugin_type, plugin_config):
         return None
 
 
+def _is_base64_encoded(data: str) -> bool:
+    """Check if the data is base64 encoded."""
+    try:
+        if isinstance(data, str):
+            decoded_data = data.encode('utf-8')
+            return decoded_data.isascii() and len(decoded_data) % 4 == 0
+        return False
+    except Exception:
+        return False
+
+
 def load_config(config_path="config.yaml") -> Config | None:
     """Load and validate the configuration from a YAML file."""
     try:
@@ -95,8 +106,14 @@ def main():
                 collected_data = watcher_instance.watch()
 
                 if collected_data:
-                    llm_response = ollama_analyzer.analyze(
-                        collected_data, prompt)
+                    llm_response = None
+                    if _is_base64_encoded(collected_data):
+                        llm_response = ollama_analyzer.analyze(
+                            prompt=prompt, image=collected_data)
+                    else:
+                        llm_response = ollama_analyzer.analyze(
+                            prompt=prompt, data=collected_data)
+
                     logging.info(f"LLM Response: {llm_response}")
 
                     for action in actions:

@@ -14,7 +14,7 @@ class ScreenWatcher(Watcher):
         super().__init__(config)
         print("ScreenWatcher initialized.")
 
-    def watch(self) -> str | None:
+    def watch(self) -> str:
         """
         Takes a screenshot and returns it as a
         Base64-encoded string.
@@ -33,4 +33,4 @@ class ScreenWatcher(Watcher):
             return img_str
         except Exception as e:
             print(f"Error taking screenshot: {e}")
-            return None
+            return ""
