@@ -1,8 +1,15 @@
 import time
-
 import yaml
+
 from analyzers.ollama import OllamaAnalyzer
 from watchers.screen import ScreenWatcher
+from actions.console import ConsoleAction
+
+
+def get_action_instance(action_name):
+    if action_name == 'console_action':
+        return ConsoleAction()
+    return None
 
 
 def load_config(config_path="config.yaml"):
@@ -41,6 +48,22 @@ def main():
         print("No active watchers found in the configuration. Exiting.")
         return
 
+    # Initialize actions based on the configuration
+    actions = []
+    for action_config in config.get('actions', []):
+        if action_config.get('enabled'):
+            action_name = action_config.get('name')
+            action_instance = get_action_instance(action_name)
+            if action_instance:
+                actions.append(action_instance)
+                print(f"'{action_name}' initialized.")
+            else:
+                print(f"Unknown action type: {action_name}. Ignored.")
+
+    if not actions:
+        print("No active actions found in the configuration. Exiting.")
+        return
+
     ollama_analyzer = OllamaAnalyzer(config)
 
     print("\nStarting monitoring loop. Press Ctrl+C to exit.")
@@ -61,15 +84,16 @@ def main():
                         collected_data, prompt)
                     print(f"LLM Response: {llm_response}")
 
-                    # Action module (ConsoleAction prototype)
-                    print(f"Action (ConsoleAction): {llm_response}")
+                    # Execute actions
+                    for action in actions:
+                        action.execute(llm_response)
                 else:
                     print(
                         f"No data collected from {watcher_name}. Skipping analysis.")
 
                 print(
                     f"Waiting {interval} seconds until next cycle for {watcher_name}...")
-                time.sleep(interval)  # Wait after each watcher cycle
+                time.sleep(interval)
 
     except KeyboardInterrupt:
         print("\nMonitoring stopped.")
