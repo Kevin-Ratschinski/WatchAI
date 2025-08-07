@@ -1,9 +1,13 @@
 import time
 import yaml
+import logging
 
 from analyzers.ollama import OllamaAnalyzer
 from watchers.screen import ScreenWatcher
 from actions.console import ConsoleAction
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 def get_action_instance(action_name):
@@ -18,10 +22,10 @@ def load_config(config_path="config.yaml"):
         with open(config_path, 'r') as f:
             return yaml.safe_load(f)
     except FileNotFoundError:
-        print(f"Error: Configuration file '{config_path}' not found.")
+        logging.error(f"Configuration file '{config_path}' not found.")
         exit(1)
     except yaml.YAMLError as e:
-        print(f"Error parsing YAML configuration: {e}")
+        logging.error(f"Error parsing YAML configuration: {e}")
         exit(1)
 
 
@@ -39,13 +43,13 @@ def main():
                     'interval': watcher_config.get('interval', 10),
                     'prompt': watcher_config.get('prompt', '')
                 }
-                print(
+                logging.info(
                     f"'{watcher_name}' initialized with interval: {watchers[watcher_name]['interval']}s")
             else:
-                print(f"Unknown watcher type: {watcher_name}. Ignored.")
+                logging.warning(f"Unknown watcher type: {watcher_name}. Ignored.")
 
     if not watchers:
-        print("No active watchers found in the configuration. Exiting.")
+        logging.info("No active watchers found in the configuration. Exiting.")
         return
 
     # Initialize actions based on the configuration
@@ -56,47 +60,52 @@ def main():
             action_instance = get_action_instance(action_name)
             if action_instance:
                 actions.append(action_instance)
-                print(f"'{action_name}' initialized.")
+                logging.info(f"'{action_name}' initialized.")
             else:
-                print(f"Unknown action type: {action_name}. Ignored.")
+                logging.warning(f"Unknown action type: {action_name}. Ignored.")
 
     if not actions:
-        print("No active actions found in the configuration. Exiting.")
+        logging.info("No active actions found in the configuration. Exiting.")
         return
 
     ollama_analyzer = OllamaAnalyzer(config)
 
-    print("\nStarting monitoring loop. Press Ctrl+C to exit.")
+    logging.info("Starting monitoring loop. Press Ctrl+C to exit.")
     try:
         while True:
             for watcher_name, watcher_info in watchers.items():
-                print(f"\n--- Starting cycle for {watcher_name} ---")
-                watcher_instance = watcher_info['instance']
-                interval = watcher_info['interval']
-                prompt = watcher_info['prompt']
+                try:
+                    logging.info(f"--- Starting cycle for {watcher_name} ---")
+                    watcher_instance = watcher_info['instance']
+                    interval = watcher_info['interval']
+                    prompt = watcher_info['prompt']
 
-                # Data collection
-                collected_data = watcher_instance.watch()
+                    # Data collection
+                    collected_data = watcher_instance.watch()
 
-                if collected_data:
-                    # Analysis
-                    llm_response = ollama_analyzer.analyze(
-                        collected_data, prompt)
-                    print(f"LLM Response: {llm_response}")
+                    if collected_data:
+                        # Analysis
+                        llm_response = ollama_analyzer.analyze(
+                            collected_data, prompt)
+                        logging.info(f"LLM Response: {llm_response}")
 
-                    # Execute actions
-                    for action in actions:
-                        action.execute(llm_response)
-                else:
-                    print(
-                        f"No data collected from {watcher_name}. Skipping analysis.")
+                        # Execute actions
+                        for action in actions:
+                            action.execute(llm_response)
+                    else:
+                        logging.info(
+                            f"No data collected from {watcher_name}. Skipping analysis.")
 
-                print(
-                    f"Waiting {interval} seconds until next cycle for {watcher_name}...")
-                time.sleep(interval)
+                    logging.info(
+                        f"Waiting {interval} seconds until next cycle for {watcher_name}...")
+                    time.sleep(interval)
+
+                except Exception as e:
+                    logging.error(f"An error occurred during the {watcher_name} cycle: {e}")
+                    time.sleep(watcher_info.get('interval', 10))  # Wait before retrying
 
     except KeyboardInterrupt:
-        print("\nMonitoring stopped.")
+        logging.info("Monitoring stopped.")
 
 
 if __name__ == "__main__":
