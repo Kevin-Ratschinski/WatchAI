@@ -1,0 +1,14 @@
+ollama:
+  host: "http://localhost:11434"
+  model: "gemma3:4b"
+
+watchers:
+  - name: "screen_watcher"
+    enabled: true
+    interval_seconds: 10
+    prompt: "Describe the current screen content in detail."
+
+  - name: "system_watcher"
+    enabled: false
+    interval_seconds: 60
+    prompt: "Are there any anomalies based on these system statistics?"
