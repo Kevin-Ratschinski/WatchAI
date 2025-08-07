@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any
 
 
 class Watcher(ABC):
@@ -7,7 +8,7 @@ class Watcher(ABC):
     """
 
     @abstractmethod
-    def watch(self):
+    def watch(self) -> Any:
         """
         Method to be implemented by subclasses to define the watch behavior.
         """
