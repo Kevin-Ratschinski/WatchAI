@@ -417,6 +417,7 @@ dependencies = [
     { name = "ollama" },
     { name = "pillow" },
     { name = "psutil" },
+    { name = "pydantic" },
     { name = "pyyaml" },
     { name = "requests" },
 ]
@@ -426,6 +427,7 @@ requires-dist = [
     { name = "ollama", specifier = "==0.5.2" },
     { name = "pillow", specifier = ">=11.3.0" },
     { name = "psutil", specifier = ">=7.0.0" },
+    { name = "pydantic", specifier = ">=2.7.1" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "requests", specifier = ">=2.32.4" },
 ]
