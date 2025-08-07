@@ -5,12 +5,12 @@ ollama:
 watchers:
   - name: "screen_watcher"
     enabled: true
-    interval_seconds: 10
+    interval: 20
     prompt: "Describe what you see on this screenshot. Focus on open applications, windows, and visible text."
 
   - name: "system_watcher"
     enabled: false
-    interval_seconds: 60
+    interval: 60
     prompt: "Are there any anomalies based on these system statistics?"
 
 actions:
